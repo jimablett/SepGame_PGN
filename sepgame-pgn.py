@@ -6,6 +6,8 @@ import argparse
 from tqdm import tqdm
 import sys
 from typing import List, Dict
+import glob
+from colorama import init, Fore, Style
 
 
 def clear_console():
@@ -31,9 +33,33 @@ def clear_output_directory():
             os.rmdir(output_dir)
         print('\ndone!\n')
 
+
+
 def load_pgn_files():
+    # Initialize colorama for cross-platform colored output
+    init()
+    
     pgn_files = [f for f in os.listdir() if f.endswith('.pgn')]
-    return pgn_files
+    
+    if not pgn_files:
+        print(f"{Fore.RED}No PGN files found in the current directory.{Style.RESET_ALL}")
+        return []
+    
+    total_size = sum(os.path.getsize(f) for f in pgn_files)
+    loaded_files = []
+    
+    print(f"{Fore.CYAN}Found {len(pgn_files)} PGN files to process{Style.RESET_ALL}")
+    
+    with tqdm(total=total_size, unit='B', unit_scale=True, 
+              desc=f"{Fore.GREEN}Loading PGN files{Style.RESET_ALL}") as pbar:
+        for file in pgn_files:
+            file_size = os.path.getsize(file)
+            loaded_files.append(file)
+            print(f"{Fore.YELLOW}Loaded: {file}{Style.RESET_ALL}")
+            pbar.update(file_size)
+    
+    print(f"{Fore.GREEN}Successfully loaded {len(loaded_files)} PGN files{Style.RESET_ALL}")
+    return loaded_files
 
 
 
@@ -333,12 +359,6 @@ def save_games_to_files(games, players_mode, openings_mode, eco_mode, eco_list):
         save_game(game, players_mode, openings_mode, eco_mode, eco_list)
 
 
-
-
-import argparse
-import sys
-import os
-import glob
 
 def combine_pgn_files(directory):
     """Combines all PGN files in the given directory into a single file named after the folder."""
