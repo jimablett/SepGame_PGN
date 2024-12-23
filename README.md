@@ -53,6 +53,10 @@ A little console utility to split a chess pgn file into separate games outputtin
  plus full opening's name.
  
  
+ Just using 'sepgame-pgn.exe --onefile' without any other switches will output a single pgn file combining all the games of each 
+ event to an individual folder with the event's name. 
+ 
+ 
  
  If the program cannot find an eco or openings header tag in any game (when using --eco or --openings) it will output using 
  the 'Event' tag instead for that particular game and continue.
