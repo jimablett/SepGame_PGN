@@ -231,10 +231,6 @@ def parse_pgn(file_content: str) -> List[Dict]:
 
 
 
-
-
-
-
 def sanitize_filename(filename):
     return re.sub(r'[^a-zA-Z0-9 ]', '', filename).strip()
 
@@ -246,41 +242,6 @@ def check_and_correct_filepath(filepath):
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
 
-
-def write_game_to_file(filepath: str, game: Dict[str, str]) -> None:
-    """Write game data to PGN file with optimized I/O."""
-    lines = []
-    for key, value in game.items():
-        if key != 'Moves':
-            if key in ('White', 'Black'):
-                lines.append(f'[{key} "{value}"]')
-            else:
-                lines.append(str(value))
-    
-    lines.extend(['', '\n'.join(game.get('Moves', [])), ''])
-    
-    with open(filepath, 'w') as f:
-        f.write('\n'.join(lines))
-
-
-def get_unique_filepath(filepath: str) -> str:
-    """
-    Generate a unique filepath by appending a number prefix if the file already exists.
-    Returns the original filepath if it doesn't exist, or a numbered version if it does.
-    """
-    if not os.path.exists(filepath):
-        return filepath
-    
-    directory = os.path.dirname(filepath)
-    filename = os.path.basename(filepath)
-    name, ext = os.path.splitext(filename)
-    
-    counter = 1
-    while True:
-        new_filepath = os.path.join(directory, f"{counter}_{filename}")
-        if not os.path.exists(new_filepath):
-            return new_filepath
-        counter += 1
 
 def write_game_to_file(filepath: str, game: Dict[str, str]) -> None:
     """
@@ -304,12 +265,11 @@ def write_game_to_file(filepath: str, game: Dict[str, str]) -> None:
 
 
 
-
-import os
-import re
-
-def get_next_available_filename(filepath):
-    """Get the next available filename by appending a number if the file exists."""
+def get_unique_filepath(filepath: str) -> str:
+    """
+    Generate a unique filepath by appending a number prefix if the file already exists.
+    Returns the original filepath if it doesn't exist, or a numbered version if it does.
+    """
     if not os.path.exists(filepath):
         return filepath
     
@@ -318,12 +278,12 @@ def get_next_available_filename(filepath):
     name, ext = os.path.splitext(filename)
     
     counter = 1
-    while os.path.exists(filepath):
-        new_filename = f"{counter:03d}_{filename}"
-        filepath = os.path.join(directory, new_filename)
+    while True:
+        new_filepath = os.path.join(directory, f"{counter}_{filename}")
+        if not os.path.exists(new_filepath):
+            return new_filepath
         counter += 1
-    
-    return filepath
+
 
 
 def get_next_available_filename(filepath):
@@ -436,20 +396,6 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
 
 
 
-def write_game_to_file(filepath, game):
-    with open(filepath, 'w') as f:
-        for key, value in game.items():
-            if key != 'Moves':
-                if key in ['White', 'Black']:
-                    f.write(f'[{key} "{value}"]\n')
-                else:
-                    f.write(f"{value}\n")
-        f.write('\n')
-        f.write('\n'.join(game.get('Moves', [])) + '\n')
-
-
-
-
 def save_games_to_files(games, players_mode, openings_mode, eco_mode, eco_list):
     output_dir = 'output'
     os.makedirs(output_dir, exist_ok=True)
@@ -461,25 +407,7 @@ def save_games_to_files(games, players_mode, openings_mode, eco_mode, eco_list):
 
 
 
-def combine_pgn_files(directory):
-    """Combines all PGN files in the given directory into a single file named after the folder."""
-    if not os.path.exists(directory):
-        return
-    
-    folder_name = os.path.basename(directory)
-    output_file = os.path.join(directory, f"{folder_name}.pgn")
-    
-    # Get all .pgn files in the directory
-    pgn_files = glob.glob(os.path.join(directory, "*.pgn"))
-    if not pgn_files:
-        return
-    
-    # Combine all files
-    with open(output_file, 'w', encoding='utf-8') as outfile:
-        for pgn_file in pgn_files:
-            if os.path.basename(pgn_file) != f"{folder_name}.pgn":  # Skip the output file if it exists
-                with open(pgn_file, 'r', encoding='utf-8') as infile:
-                    outfile.write(infile.read() + "\n\n")
+
 
 def process_one_file(base_dir, category=None):
     """Process directories to combine PGN files based on category."""
