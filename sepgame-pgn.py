@@ -10,6 +10,7 @@ import glob
 from colorama import init, Fore, Style
 
 
+
 def clear_console():
     if platform.system() == 'Windows':
         os.system('cls')
@@ -97,14 +98,14 @@ def convert_to_english_chars(text: str) -> str:
     
     return ''.join(char_map.get(c, c) for c in text)
 
+
 def parse_pgn(file_content: str) -> List[Dict]:
     # Predefined set of keys that should preserve the full line format
-    
     PRESERVE_LINE_KEYS = {
         # Event Information
         'event', 'eventdate', 'eventsponsor', 'eventtype', 'eventrounds', 'eventcountry', 'eventcategory',
         
-        # Game Location and Time
+       # Game Location and Time
         'site', 'date', 'time', 'utctime', 'utcdate',
         
         # Player Information - White
@@ -174,38 +175,56 @@ def parse_pgn(file_content: str) -> List[Dict]:
     }
     
     
-    
     # Compile regex pattern once - making it case insensitive with (?i)
     header_pattern = re.compile(r'(?i)\[(\w+)\s+"(.+)"\]')
     
     games = []
-    game_data = {}
+    game_data = None
+    moves = []
     
     for line in file_content.splitlines():
         line = convert_to_english_chars(line.strip())  # Convert special characters
+        
+        # Skip empty lines unless they're separating games
         if not line:
+            if moves and game_data:  # If we have moves and game data, this empty line might be separating games
+                game_data['Moves'] = moves
+                games.append(game_data)
+                game_data = None
+                moves = []
             continue
             
         if line.startswith('['):
-            # Case insensitive check for new game
-            if re.match(r'(?i)\[event\s+', line) and game_data:
-                games.append(game_data)
-                game_data = {}
-            
             match = header_pattern.match(line)
             if match:
                 key, value = match.groups()
-                # Convert key to lowercase for consistent comparison
                 key_lower = key.lower()
-                # Store original key to preserve case in output
+                
+                # If we encounter an Event tag and we're not at the start
+                if key_lower == 'event':
+                    if game_data:  # If we have a previous game
+                        if moves:  # Don't forget to add the moves to the previous game
+                            game_data['Moves'] = moves
+                        games.append(game_data)
+                        moves = []
+                    game_data = {}  # Start a new game
+                
+                # If this is our first header
+                if game_data is None:
+                    game_data = {}
+                
+                # Store the header information
                 if key_lower in PRESERVE_LINE_KEYS:
                     game_data[key] = line.replace(',', ' ')
                 else:
                     game_data[key] = value
-        elif line:
-            game_data.setdefault('Moves', []).append(line)
+        elif line and game_data is not None:  # Only collect moves if we have a game in progress
+            moves.append(line)
     
+    # Don't forget to add the last game
     if game_data:
+        if moves:
+            game_data['Moves'] = moves
         games.append(game_data)
     
     return games
@@ -244,44 +263,121 @@ def write_game_to_file(filepath: str, game: Dict[str, str]) -> None:
         f.write('\n'.join(lines))
 
 
+def get_unique_filepath(filepath: str) -> str:
+    """
+    Generate a unique filepath by appending a number prefix if the file already exists.
+    Returns the original filepath if it doesn't exist, or a numbered version if it does.
+    """
+    if not os.path.exists(filepath):
+        return filepath
+    
+    directory = os.path.dirname(filepath)
+    filename = os.path.basename(filepath)
+    name, ext = os.path.splitext(filename)
+    
+    counter = 1
+    while True:
+        new_filepath = os.path.join(directory, f"{counter}_{filename}")
+        if not os.path.exists(new_filepath):
+            return new_filepath
+        counter += 1
+
+def write_game_to_file(filepath: str, game: Dict[str, str]) -> None:
+    """
+    Write game data to PGN file with optimized I/O.
+    If the file already exists, a number prefix will be added to the filename.
+    """
+    lines = []
+    for key, value in game.items():
+        if key != 'Moves':
+            if key in ('White', 'Black'):
+                lines.append(f'[{key} "{value}"]')
+            else:
+                lines.append(str(value))
+    
+    lines.extend(['', '\n'.join(game.get('Moves', [])), ''])
+    
+    unique_filepath = get_unique_filepath(filepath)
+    with open(unique_filepath, 'w') as f:
+        f.write('\n'.join(lines))
+
+
+
+
+
+import os
+import re
+
+def get_next_available_filename(filepath):
+    """Get the next available filename by appending a number if the file exists."""
+    if not os.path.exists(filepath):
+        return filepath
+    
+    directory = os.path.dirname(filepath)
+    filename = os.path.basename(filepath)
+    name, ext = os.path.splitext(filename)
+    
+    counter = 1
+    while os.path.exists(filepath):
+        new_filename = f"{counter:03d}_{filename}"
+        filepath = os.path.join(directory, new_filename)
+        counter += 1
+    
+    return filepath
+
+
+def get_next_available_filename(filepath):
+    """Get the next available filename by appending a number if the file exists."""
+    directory = os.path.dirname(filepath)
+    filename = os.path.basename(filepath)
+    
+    # Get all existing files in the directory
+    existing_files = []
+    if os.path.exists(directory):
+        existing_files = [f for f in os.listdir(directory) if f.endswith('.pgn')]
+    
+    # Find the highest number used
+    highest_num = 0
+    for f in existing_files:
+        match = re.match(r'^(\d+)_', f)
+        if match:
+            num = int(match.group(1))
+            highest_num = max(highest_num, num)
+    
+    # Create new filename with next number
+    new_filename = f"{highest_num + 1:04d}_{filename}"
+    return os.path.join(directory, new_filename)
 
 def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
     output_dir = 'output'
     
-    # Clean up White and Black values by removing extra "]" characters and spaces between name and initial
+    # Clean up White and Black values
     if 'White' in game:
         white_value = game['White']
         if white_value.endswith('"]"]'):
             game['White'] = white_value[:-1]
-        # Remove extra spaces between name and initial
         game['White'] = re.sub(r'\s+([A-Z]\.]?")', r' \1', game['White'])
+        game['White'] = game['White'].replace('[White "', '').replace('"]', '').strip()
     
     if 'Black' in game:
         black_value = game['Black']
         if black_value.endswith('"]"]'):
             game['Black'] = black_value[:-1]
-        # Remove extra spaces between name and initial
         game['Black'] = re.sub(r'\s+([A-Z]\.]?")', r' \1', game['Black'])
-
-    # Clean up White and Black values to remove duplicate words and brackets
-    if 'White' in game:
-        game['White'] = game['White'].replace('[White "', '').replace('"]', '').strip()
-    if 'Black' in game:
         game['Black'] = game['Black'].replace('[Black "', '').replace('"]', '').strip()
 
-    eco_tag = game.get('ECO')
-    if eco_mode and eco_tag:
+    if eco_mode and 'ECO' in game:
+        eco_tag = game['ECO']
         eco_name = eco_tag.split('"')[1]
         eco_prefix = eco_name[:3]
         eco_replacement = next((line for line in eco_list if line.startswith(eco_prefix)), eco_name)
-        eco_name = eco_replacement
-        
-        eco_name = ' '.join(eco_name.split())
+        eco_name = ' '.join(eco_replacement.split())
         eco_dir = os.path.join(output_dir, eco_name)
         check_and_correct_filepath(eco_dir)
         
         filename = f'{replace_double_spaces(sanitize_filename(game.get("White", "Unknown")))} vs {replace_double_spaces(sanitize_filename(game.get("Black", "Unknown")))}.pgn'
         filepath = os.path.join(eco_dir, filename)
+        filepath = get_next_available_filename(filepath)
         check_and_correct_filepath(filepath)
         
         write_game_to_file(filepath, game)
@@ -298,6 +394,9 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
         filepath_w = os.path.join(player_dir_w, filename)
         filepath_b = os.path.join(player_dir_b, filename)
         
+        filepath_w = get_next_available_filename(filepath_w)
+        filepath_b = get_next_available_filename(filepath_b)
+        
         check_and_correct_filepath(filepath_w)
         check_and_correct_filepath(filepath_b)
         
@@ -313,6 +412,7 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
         
         filename = f'{replace_double_spaces(sanitize_filename(game.get("White", "Unknown")))} vs {replace_double_spaces(sanitize_filename(game.get("Black", "Unknown")))}.pgn'
         filepath = os.path.join(opening_dir, filename)
+        filepath = get_next_available_filename(filepath)
         check_and_correct_filepath(filepath)
         
         write_game_to_file(filepath, game)
@@ -328,6 +428,7 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
         player_b = replace_double_spaces(sanitize_filename(game.get('Black', 'Unknown'))).replace('Black', '')
         filename = f'{player_w} vs {player_b}.pgn'
         filepath = os.path.join(event_dir, filename)
+        filepath = get_next_available_filename(filepath)
         check_and_correct_filepath(filepath)
         
         write_game_to_file(filepath, game)
