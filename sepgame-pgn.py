@@ -1,5 +1,3 @@
-import os
-import re
 import shutil
 import platform
 import argparse
@@ -8,6 +6,12 @@ import sys
 from typing import List, Dict
 import glob
 from colorama import init, Fore, Style
+from concurrent.futures import ThreadPoolExecutor
+import os
+import re
+
+
+
 
 def clear_console():
     os.system('cls' if platform.system() == 'Windows' else 'clear')
@@ -128,8 +132,6 @@ def parse_pgn(file_content: str) -> List[Dict]:
     
     return games
 
-
-
 def sanitize_filename(filename):
     return re.sub(r'[^a-zA-Z0-9 ]', '', filename).strip()
 
@@ -237,16 +239,15 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
 
 def save_games_to_files(games, players_mode, openings_mode, eco_mode, eco_list):
     os.makedirs('output', exist_ok=True)
-    for game in tqdm(games, desc="\033[92mProcessing games\033[0m"):
-        if game.get('Moves'):
-            save_game(game, players_mode, openings_mode, eco_mode, eco_list)
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(save_game, game, players_mode, openings_mode, eco_mode, eco_list) for game in games]
+        for future in tqdm(futures, desc="\033[92mProcessing games\033[0m"):
+            future.result()
 
 def process_one_file(base_dir, category=None):
     pattern = os.path.join(base_dir, "*/")
     for dir_path in glob.glob(pattern):
         combine_pgn_files(dir_path.rstrip('/'))
-
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -267,9 +268,10 @@ def main():
         with open('ecolist.txt', 'r') as eco_file:
             eco_list = eco_file.read().splitlines()
     
-    for pgn_file in pgn_files:
-        with open(pgn_file, 'r') as f:
-            all_games.extend(parse_pgn(f.read()))
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(parse_pgn, open(pgn_file, 'r').read()) for pgn_file in pgn_files]
+        for future in futures:
+            all_games.extend(future.result())
             
     if not any(game.get('White') for game in all_games):
        print("\n\033[93mNo 'PGN' file has been found in the current directory!\033[0m\n")
@@ -331,5 +333,3 @@ if __name__ == "__main__":
         main()
     except Exception as e:
         print(f"An error occurred: {e}", file=sys.stderr)
-
-
