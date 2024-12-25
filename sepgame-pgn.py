@@ -132,11 +132,13 @@ def parse_pgn(file_content: str) -> List[Dict]:
     
     return games
 
-def sanitize_filename(filename):
-    return re.sub(r'[^a-zA-Z0-9 ]', '', filename).strip()
 
-def replace_double_spaces(filename):
-    return re.sub(r'\s{2,}', ' ', filename)
+def sanitize_filename(filename):
+    # First, reduce multiple spaces to single space
+    filename = re.sub(r'\s+', ' ', filename)
+    # Allow alphanumeric characters, spaces, and hyphens
+    return re.sub(r'[^a-zA-Z0-9 -]', '', filename).strip()
+
 
 def check_and_correct_filepath(filepath):
     if not os.path.exists(os.path.dirname(filepath)):
@@ -202,14 +204,14 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
         eco_prefix = eco_name[:3]
         eco_replacement = next((line for line in eco_list if line.startswith(eco_prefix)), eco_name)
         eco_dir = os.path.join(output_dir, ' '.join(eco_replacement.split()))
-        filename = f'{replace_double_spaces(sanitize_filename(game.get("White", "Unknown")))} vs {replace_double_spaces(sanitize_filename(game.get("Black", "Unknown")))}.pgn'
+        filename = f'{sanitize_filename(game.get("White", "Unknown"))} vs {sanitize_filename(game.get("Black", "Unknown"))}.pgn'
         filepath = get_next_available_filename(os.path.join(eco_dir, filename))
         check_and_correct_filepath(filepath)
         write_game_to_file(filepath, game)
 
     elif players_mode:
-        player_w = replace_double_spaces(sanitize_filename(game.get('White', 'Unknown'))).replace('White', '')
-        player_b = replace_double_spaces(sanitize_filename(game.get('Black', 'Unknown'))).replace('Black', '')
+        player_w = sanitize_filename(game.get('White', 'Unknown')).replace('White', '')
+        player_b = sanitize_filename(game.get('Black', 'Unknown')).replace('Black', '')
         filename = f'{player_w} vs {player_b}.pgn'
         
         for player_dir in (os.path.join(output_dir, player) for player in (player_w, player_b)):
@@ -218,20 +220,20 @@ def save_game(game, players_mode, openings_mode, eco_mode, eco_list):
             write_game_to_file(filepath, game)
 
     elif openings_mode:
-        opening_name = replace_double_spaces(sanitize_filename(game.get('Opening', 'Unknown')))
+        opening_name = sanitize_filename(game.get('Opening', 'Unknown'))
         if opening_name != 'Unknown':
             opening_dir = os.path.join(output_dir, opening_name)
-            filename = f'{replace_double_spaces(sanitize_filename(game.get("White", "Unknown")))} vs {replace_double_spaces(sanitize_filename(game.get("Black", "Unknown")))}.pgn'
+            filename = f'{sanitize_filename(game.get("White", "Unknown"))} vs {sanitize_filename(game.get("Black", "Unknown"))}.pgn'
             filepath = get_next_available_filename(os.path.join(opening_dir, filename))
             check_and_correct_filepath(filepath)
             write_game_to_file(filepath, game)
 
     else:
-        event_name = replace_double_spaces(sanitize_filename(game.get('Event', 'Unknown'))).replace('Event', 'Event')
-        date_name = replace_double_spaces(sanitize_filename(game.get('Date', 'Unknown'))).replace('Date', 'Date')
+        event_name = sanitize_filename(game.get('Event', 'Unknown')).replace('Event', 'Event')
+        date_name = sanitize_filename(game.get('Date', 'Unknown')).replace('Date', 'Date')
         event_dir = os.path.join(output_dir, f"{event_name} {date_name}")
-        player_w = replace_double_spaces(sanitize_filename(game.get('White', 'Unknown'))).replace('White', '')
-        player_b = replace_double_spaces(sanitize_filename(game.get('Black', 'Unknown'))).replace('Black', '')
+        player_w = sanitize_filename(game.get('White', 'Unknown')).replace('White', '')
+        player_b = sanitize_filename(game.get('Black', 'Unknown')).replace('Black', '')
         filename = f'{player_w} vs {player_b}.pgn'
         filepath = get_next_available_filename(os.path.join(event_dir, filename))
         check_and_correct_filepath(filepath)
