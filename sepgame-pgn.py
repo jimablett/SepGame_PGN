@@ -11,8 +11,6 @@ import os
 import re
 
 
-
-
 def clear_console():
     os.system('cls' if platform.system() == 'Windows' else 'clear')
 
@@ -251,6 +249,69 @@ def process_one_file(base_dir, category=None):
     for dir_path in glob.glob(pattern):
         combine_pgn_files(dir_path.rstrip('/'))
 
+
+def merge_similar_folders(base_path):
+    # Get all directories in the base path
+    directories = [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+    
+    # Process directories
+    processed = set()
+    for dir1 in directories:
+        if dir1 in processed:
+            continue
+            
+        words1 = dir1.split()
+        if len(words1) < 2:
+            continue
+            
+        first_word1 = words1[0]
+        second_word1 = words1[1] if len(words1) > 1 else ''
+        
+        for dir2 in directories:
+            if dir1 == dir2 or dir2 in processed:
+                continue
+                
+            words2 = dir2.split()
+            if len(words2) < 2:
+                continue
+                
+            first_word2 = words2[0]
+            second_word2 = words2[1] if len(words2) > 1 else ''
+            
+            # Check if folders have the same first word
+            if first_word1 == first_word2:
+                # Compare second words up to 4 characters
+                match = True
+                for i in range(min(4, min(len(second_word1), len(second_word2)))):
+                    if (i < len(second_word1) and i < len(second_word2) and 
+                        second_word1[i] != second_word2[i]):
+                        match = False
+                        break
+                
+                if match:
+                    # Determine which folder has the longer second word
+                    source_dir = dir1 if len(second_word1) > len(second_word2) else dir2
+                    target_dir = dir2 if len(second_word1) > len(second_word2) else dir1
+                    
+                    source_path = os.path.join(base_path, source_dir)
+                    target_path = os.path.join(base_path, target_dir)
+                    
+                    # Copy all files from source to target
+                    for item in os.listdir(source_path):
+                        s = os.path.join(source_path, item)
+                        d = os.path.join(target_path, item)
+                        if os.path.isfile(s):
+                            shutil.copy2(s, d)
+                    
+                    # Delete the source directory
+                    shutil.rmtree(source_path)
+                    
+                    processed.add(source_dir)
+                    processed.add(target_dir)
+
+
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--players', action='store_true', help='Organize output by player names')
@@ -293,6 +354,10 @@ def main():
     
     save_games_to_files(all_games, args.players, args.openings, args.eco, eco_list)
     
+    output_dir = 'output'
+    if os.path.exists(output_dir):
+     merge_similar_folders(output_dir)   
+    
     if args.onefile:
         combine_pgn_files(args.players, args.openings, args.eco)
     
@@ -318,6 +383,7 @@ def combine_pgn_files(by_players=False, by_openings=False, by_eco=False):
         output_file = os.path.join(subdir_path, f"{subdir}.pgn")
         print(f"\nProcessing {subdir}...")
         
+        
         with open(output_file, 'w') as outfile:
             with tqdm(total=len(pgn_files), desc="Combining files", unit="file") as pbar:
                 for pgn_file in pgn_files:
@@ -329,6 +395,12 @@ def combine_pgn_files(by_players=False, by_openings=False, by_eco=False):
                                 outfile.write(content + "\n\n")
                         os.remove(file_path)
                     pbar.update(1)
+                    
+        
+        
+
+                    
+                   
 
 if __name__ == "__main__":
     try:
